@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, Suspense, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { postJson } from '@/lib/apiClient'
@@ -13,6 +13,20 @@ type RegisterResult = {
 }
 
 export default function RegisterPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+                    <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+            }
+        >
+            <RegisterPageContent />
+        </Suspense>
+    )
+}
+
+function RegisterPageContent() {
     const router = useRouter()
     const search = useSearchParams()
     const [email, setEmail] = useState('')
