@@ -64,56 +64,63 @@ export default function HomePage() {
                     </nav>
                 </header>
 
-                <section className="mt-8 md:mt-10 rounded-[38px] border border-white/90 bg-[linear-gradient(160deg,#eef5ff_0%,#f5f9ff_24%,#fff6f1_62%,#f4fffb_100%)] shadow-[0_38px_100px_-56px_rgba(15,23,42,0.55)] overflow-hidden">
-                    <div className="px-5 md:px-10 lg:px-14 pt-10 md:pt-14 pb-10 md:pb-14">
-                        <div className="grid lg:grid-cols-[0.95fr_1.05fr] items-center gap-10 lg:gap-12">
-                            <div>
-                                <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    Auction Room Ready
-                                </p>
-                                <h1 className="mt-5 text-4xl md:text-5xl lg:text-[60px] leading-[1.02] font-black tracking-tight text-slate-900">
-                                    Run high-stakes
-                                    <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-600">
-                                        cricket player auctions
-                                    </span>
-                                    with precision and pace.
-                                </h1>
-                                <p className="mt-5 text-slate-600 text-base md:text-lg max-w-xl leading-relaxed">
-                                    From live player bidding to purse tracking and squad balance, this platform gives
-                                    organizers and team owners a premium auction room experience.
-                                </p>
-                                <div className="mt-7 flex flex-wrap gap-3">
-                                    <Link
-                                        href="/register?next=/plans"
-                                        className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm md:text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-slate-900/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
-                                    >
-                                        Start Auction Setup
-                                    </Link>
-                                    <Link
-                                        href="/dashboard/live"
-                                        className="px-6 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm md:text-base font-semibold hover:bg-slate-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
-                                    >
-                                        Open Live Bid Room
-                                    </Link>
-                                    <Link
-                                        href="/sample_players.csv"
-                                        className="px-6 py-3 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-sm md:text-base font-semibold hover:bg-cyan-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                                    >
-                                        Download Sample CSV
-                                    </Link>
-                                </div>
-                                <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs md:text-sm text-slate-500">
-                                    <span>Live player auction rounds</span>
-                                    <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                    <span>Team demand and purse strategy</span>
-                                    <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                    <span>Transparent fast decisions</span>
-                                </div>
+                <section className="mt-12 md:mt-16 lg:mt-20">
+                    <div className="grid lg:grid-cols-[0.96fr_1.04fr] items-center gap-12 lg:gap-14">
+                        <div>
+                            <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Auction Room Ready
+                            </p>
+                            <h1 className="mt-6 text-4xl md:text-5xl lg:text-[64px] leading-[1.01] font-black tracking-tight text-slate-900">
+                                Run high-stakes
+                                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-600">
+                                    cricket player auctions
+                                </span>
+                                with precision and pace.
+                            </h1>
+                            <p className="mt-6 text-slate-600 text-base md:text-xl max-w-xl leading-relaxed">
+                                From live player bidding to purse tracking and squad balance, this platform gives
+                                organizers and team owners a premium auction room experience.
+                            </p>
+                            <div className="mt-8 flex flex-wrap gap-3">
+                                <Link
+                                    href="/register?next=/plans"
+                                    className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm md:text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-slate-900/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                                >
+                                    Start Auction Setup
+                                </Link>
+                                <Link
+                                    href="/dashboard/live"
+                                    className="px-6 py-3 rounded-xl border border-slate-300 bg-white/90 text-slate-800 text-sm md:text-base font-semibold hover:bg-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                                >
+                                    Open Live Bid Room
+                                </Link>
+                                <Link
+                                    href="/sample_players.csv"
+                                    className="px-6 py-3 rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-800 text-sm md:text-base font-semibold hover:bg-cyan-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                                >
+                                    Download Sample CSV
+                                </Link>
                             </div>
+                            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs md:text-sm text-slate-500">
+                                <span>Live player auction rounds</span>
+                                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                <span>Team demand and purse strategy</span>
+                                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                <span>Transparent fast decisions</span>
+                            </div>
+                        </div>
 
+                        <div className="w-full">
                             <HeroAuctionBoard />
                         </div>
+                    </div>
+
+                    <div className="mt-10 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                        <span className="text-slate-600 font-medium">Trusted by:</span>
+                        <span className="rounded-full bg-white/70 px-3 py-1 border border-slate-200">League Organizers</span>
+                        <span className="rounded-full bg-white/70 px-3 py-1 border border-slate-200">Club Captains</span>
+                        <span className="rounded-full bg-white/70 px-3 py-1 border border-slate-200">Tournament Hosts</span>
                     </div>
                 </section>
 
