@@ -33,15 +33,42 @@ export function extractGoogleDriveId(url: string | null | undefined): string | n
     return idMatch
 }
 
+function normalizeHttpUrl(raw: string): string | null {
+    if (/^https?:\/\//i.test(raw)) {
+        try {
+            const parsed = new URL(raw)
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return null
+            }
+            return parsed.toString()
+        } catch {
+            return null
+        }
+    }
+
+    if (/^www\./i.test(raw)) {
+        try {
+            return new URL(`https://${raw}`).toString()
+        } catch {
+            return null
+        }
+    }
+
+    return null
+}
+
 export function normalizePhotoUrl(url: string | null | undefined): string | null {
     const clean = safeTrim(url)
     if (!clean) return null
 
     const driveId = extractGoogleDriveId(clean)
     if (driveId) {
-        // Drive IDs are best rendered using a stable googleusercontent image endpoint.
-        return `https://lh3.googleusercontent.com/d/${driveId}=w1000`
+        return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveId)}`
     }
 
-    return clean
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(clean)) {
+        return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(clean)}`
+    }
+
+    return normalizeHttpUrl(clean)
 }

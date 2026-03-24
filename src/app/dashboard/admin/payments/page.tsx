@@ -74,8 +74,8 @@ export default function PaymentReviewPage() {
         const daysRaw = window.prompt('Activate for how many days?', '30')
         if (!daysRaw) return
         const validDays = Number(daysRaw)
-        if (!Number.isFinite(validDays) || validDays <= 0) {
-            setError('Please enter a valid number of days.')
+        if (!Number.isFinite(validDays) || validDays <= 0 || validDays > 365) {
+            setError('Please enter a valid number of days between 1 and 365.')
             return
         }
 

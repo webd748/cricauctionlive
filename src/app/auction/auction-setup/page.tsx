@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import { postJson } from '@/lib/apiClient'
 import { getErrorMessage } from '@/lib/errors'
@@ -74,7 +73,31 @@ function AuctionSetupContent() {
         const load = async () => {
             setLoading(true)
             try {
-                const { data, error } = await supabase.from('auction_settings').select('*').limit(1).single()
+                const response = await fetch('/api/settings', {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
+                })
+                const payload = (await response.json().catch(() => null)) as
+                    | { data?: Record<string, unknown> | null; error?: string }
+                    | null
+                if (!response.ok) {
+                    throw new Error(payload?.error ?? 'Failed to load auction settings.')
+                }
+
+                const data = payload?.data as
+                    | {
+                        id: string
+                        auction_name?: string
+                        num_teams?: number
+                        wallet_per_team?: number
+                        base_price?: number
+                        min_squad_size?: number
+                        is_active?: boolean
+                        bid_tiers?: BidTier[]
+                    }
+                    | null
+
                 if (data) {
                     setExistingId(data.id)
                     setForm({
@@ -86,8 +109,6 @@ function AuctionSetupContent() {
                         is_active: data.is_active ?? true,
                         bid_tiers: data.bid_tiers ?? DEFAULT_TIERS,
                     })
-                } else if (error && error.code !== 'PGRST116') {
-                    setError(error.message)
                 }
             } catch (error) {
                 setError(getErrorMessage(error, 'Network error: Failed to reach database.'))

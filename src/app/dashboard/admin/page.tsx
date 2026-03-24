@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { supabase } from '@/lib/supabaseClient'
+
 import { ClientOnly } from '@/components/ClientOnly'
 import { postJson } from '@/lib/apiClient'
 import { normalizePhotoUrl } from '@/lib/photoUrl'
+import { decodeObject } from '@/lib/decode'
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -146,7 +147,6 @@ function AdminContent() {
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
     const toastRef = useRef<NodeJS.Timeout | null>(null)
-    const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
     const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
         setToast({ msg, type })
@@ -155,48 +155,54 @@ function AdminContent() {
     }
 
     const fetchAll = useCallback(async () => {
-        const [{ data: stateData }, { data: settingsData }] = await Promise.all([
-            supabase.from('auction_state').select('*').limit(1).single(),
-            supabase.from('auction_settings').select('*').limit(1).single(),
-        ])
+        try {
+            const response = await fetch('/api/auction?view=admin', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            })
+            const payload = (await response.json().catch(() => null)) as
+                | {
+                    data?: {
+                        auctionState?: AuctionState | null
+                        settings?: AuctionSettings | null
+                        currentPlayer?: Player | null
+                        teams?: Team[]
+                        availablePlayers?: Player[]
+                        stats?: PlayerStats
+                    }
+                    error?: string
+                }
+                | null
+            if (!response.ok) {
+                throw new Error(payload?.error ?? 'Failed to load admin auction data.')
+            }
 
-        const state: AuctionState | null = stateData ?? null
-        setAuctionState(state)
-        setSettings(settingsData ?? null)
+            const decodedData = decodeObject(payload?.data)
 
-        const [playerResult, teamsResult, soldResult, allPlayersResult] = await Promise.all([
-            state?.current_player_id
-                ? supabase.from('players').select('*').eq('id', state.current_player_id).single()
-                : Promise.resolve({ data: null }),
-            supabase.from('teams').select('id, name, acronym, logo_url, wallet_balance').order('name'),
-            supabase.rpc('team_player_counts'),
-            supabase.from('players').select('*').order('created_at'),
-        ])
-
-        setCurrentPlayer(playerResult.data ?? null)
-
-        const teamsData = teamsResult.data ?? []
-        const soldData = soldResult.data ?? []
-        const soldCountMap: Record<string, number> = {}
-        soldData.forEach((sale: { team_id: string; player_count: number }) => {
-            soldCountMap[sale.team_id] = Number(sale.player_count ?? 0)
-        })
-
-        setTeams(teamsData.map(t => ({
-            ...t,
-            wallet_balance: t.wallet_balance ?? 0,
-            player_count: soldCountMap[t.id] ?? 0
-        })))
-
-        const ap = allPlayersResult.data ?? []
-        setAvailablePlayers(ap.filter(p => !p.is_sold))
-        setStats({
-            sold: ap.filter(p => p.is_sold).length,
-            unsold: ap.filter(p => !p.is_sold && p.id !== state?.current_player_id).length,
-            available: ap.filter(p => !p.is_sold).length,
-        })
-
-        setLoading(false)
+            setAuctionState(decodedData?.auctionState ?? null)
+            setSettings(decodedData?.settings ?? null)
+            setCurrentPlayer(decodedData?.currentPlayer ?? null)
+            setTeams(
+                (decodedData?.teams ?? []).map((team) => ({
+                    ...team,
+                    wallet_balance: team.wallet_balance ?? 0,
+                    player_count: team.player_count ?? 0,
+                })),
+            )
+            setAvailablePlayers(decodedData?.availablePlayers ?? [])
+            setStats(
+                decodedData?.stats ?? {
+                    sold: 0,
+                    unsold: 0,
+                    available: 0,
+                },
+            )
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to load admin auction data.', 'error')
+        } finally {
+            setLoading(false)
+        }
     }, [])
 
     useEffect(() => {
@@ -205,22 +211,10 @@ function AdminContent() {
         }
         const kickoff = window.setTimeout(runFetch, 0)
         intervalRef.current = setInterval(runFetch, 20000)
-        realtimeRef.current = supabase
-            .channel('admin-auction')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_state' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sold_players' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_settings' }, runFetch)
-            .subscribe()
         return () => {
             window.clearTimeout(kickoff)
             if (intervalRef.current) clearInterval(intervalRef.current)
             if (toastRef.current) clearTimeout(toastRef.current)
-            if (realtimeRef.current) {
-                void supabase.removeChannel(realtimeRef.current)
-                realtimeRef.current = null
-            }
         }
     }, [fetchAll])
 

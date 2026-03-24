@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import { deleteJson } from '@/lib/apiClient'
 import { getErrorMessage } from '@/lib/errors'
@@ -39,9 +38,18 @@ function TeamSetupContent() {
 
     const loadTeams = async () => {
         try {
-            const { data, error } = await supabase.from('teams').select('*').order('created_at', { ascending: true })
-            if (error) throw error
-            setTeams(data || [])
+            const response = await fetch('/api/teams?view=setup', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            })
+            const payload = (await response.json().catch(() => null)) as
+                | { data?: { teams?: Team[] }; error?: string }
+                | null
+            if (!response.ok) {
+                throw new Error(payload?.error ?? 'Failed to load teams')
+            }
+            setTeams(payload?.data?.teams ?? [])
         } catch (error) {
             setError(getErrorMessage(error, 'Failed to load teams'))
         } finally {

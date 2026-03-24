@@ -112,6 +112,24 @@ export function clearSessionCookies(response: NextResponse) {
     })
 }
 
+export async function revokeAccessSession(accessToken: string): Promise<void> {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !accessToken) {
+        return
+    }
+
+    try {
+        await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+            method: 'POST',
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${accessToken}`,
+            },
+        })
+    } catch {
+        // Ignore logout revocation failures and clear local cookies regardless.
+    }
+}
+
 export async function resolveSession(req: NextRequest) {
     const accessToken = getAccessTokenFromRequest(req)
     const refreshToken = getRefreshTokenFromRequest(req)

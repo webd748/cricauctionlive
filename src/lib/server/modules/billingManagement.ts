@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getBillingPlan } from '@/lib/billing'
+import { detectImageMimeFromBytes } from '@/lib/server/imageValidation'
 
 export type BillingSubscriptionStatus =
     | 'pending_payment'
@@ -41,6 +42,8 @@ export type BillingState = {
     plan: ReturnType<typeof getBillingPlan>
     latestProof: BillingPaymentProof | null
 }
+
+const ALLOWED_PAYMENT_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 
 async function createSignedProofUrl(client: SupabaseClient, path: string | null): Promise<string | null> {
     if (!path) return null
@@ -129,15 +132,25 @@ export async function submitBillingPaymentProof(
     if (input.screenshot.size > 10 * 1024 * 1024) {
         throw new Error('Screenshot file must be 10MB or less.')
     }
+    if (!ALLOWED_PAYMENT_IMAGE_TYPES.has(input.screenshot.type)) {
+        throw new Error('Screenshot must be a PNG, JPG, or WEBP image.')
+    }
 
     const safeName = sanitizeFileName(input.screenshot.name)
     const filePath = `${input.userId}/${Date.now()}-${safeName}`
     const fileBuffer = Buffer.from(await input.screenshot.arrayBuffer())
+    const detectedType = detectImageMimeFromBytes(fileBuffer)
+    if (!detectedType || !ALLOWED_PAYMENT_IMAGE_TYPES.has(detectedType)) {
+        throw new Error('Screenshot content is invalid. Upload a valid PNG, JPG, or WEBP image.')
+    }
+    if (input.screenshot.type && input.screenshot.type !== detectedType) {
+        throw new Error('Screenshot type does not match file content.')
+    }
 
     const { error: uploadError } = await client.storage
         .from('payment-proofs')
         .upload(filePath, fileBuffer, {
-            contentType: input.screenshot.type || 'image/png',
+            contentType: detectedType,
             upsert: false,
         })
 
@@ -199,9 +212,10 @@ export async function reviewBillingProof(
     }
 
     if (input.action === 'approve') {
+        const safeValidDays = Math.min(365, Math.max(1, Number(input.validDays ?? 30)))
         const { error } = await client.rpc('approve_payment_proof', {
             p_proof_id: input.proofId,
-            p_valid_days: Math.max(1, Number(input.validDays ?? 30)),
+            p_valid_days: safeValidDays,
         })
         if (error) {
             throw new Error(error.message)

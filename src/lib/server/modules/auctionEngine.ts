@@ -160,6 +160,15 @@ export async function executeAuctionAction(
         const isLive = Boolean(payload.isLive ?? true)
         if (!playerId) throw new Error('playerId is required.')
 
+        const { data: selectedPlayer, error: selectedPlayerError } = await client
+            .from('players')
+            .select('id,is_sold')
+            .eq('id', playerId)
+            .maybeSingle()
+        if (selectedPlayerError) throw new Error(selectedPlayerError.message)
+        if (!selectedPlayer) throw new Error('Selected player does not exist.')
+        if (selectedPlayer.is_sold) throw new Error('Selected player is already sold.')
+
         const state = await ensureAuctionState(client)
         const { data: settings } = await client
             .from('auction_settings')
@@ -246,17 +255,25 @@ export async function executeAuctionAction(
         }
 
         const state = await ensureAuctionState(client)
+        if (!state.current_player_id) {
+            throw new Error('No active player selected.')
+        }
+        if (!state.is_live) {
+            throw new Error('Auction is not live.')
+        }
+
         const { data: settings } = await client
             .from('auction_settings')
-            .select('bid_tiers')
+            .select('bid_tiers,base_price')
             .limit(1)
             .maybeSingle()
 
         const bidTiers = parseBidTiers(settings?.bid_tiers)
         const currentBid = Number(state.current_bid ?? 0)
+        const floorBid = Number(settings?.base_price ?? 0)
         const tier = bidTiers.find((item) => currentBid >= item.from && currentBid < item.to) ?? bidTiers.at(-1)
         const increment = Number(tier?.increment ?? 100)
-        const newBid = direction === 'up' ? currentBid + increment : Math.max(0, currentBid - increment)
+        const newBid = direction === 'up' ? currentBid + increment : Math.max(floorBid, currentBid - increment)
 
         const { data, error } = await client
             .from('auction_state')

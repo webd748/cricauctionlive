@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import Papa from 'papaparse'
 import { useRouter } from 'next/navigation'
@@ -56,9 +55,18 @@ function PlayerSetupContent() {
 
     const loadPlayers = async () => {
         try {
-            const { data, error } = await supabase.from('players').select('*').order('created_at', { ascending: false })
-            if (error) throw error
-            setPlayers((data ?? []).map((player) => ({
+            const response = await fetch('/api/players?view=setup', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            })
+            const payload = (await response.json().catch(() => null)) as
+                | { data?: { players?: Player[] }; error?: string }
+                | null
+            if (!response.ok) {
+                throw new Error(payload?.error ?? 'Failed to load players')
+            }
+            setPlayers((payload?.data?.players ?? []).map((player) => ({
                 ...player,
                 photo_url: normalizePhotoUrl(player.photo_url),
             })))
@@ -156,10 +164,6 @@ function PlayerSetupContent() {
         }
     }
 
-    const formatINR = (val: number) => `₹${val.toLocaleString('en-IN')}`
-
-    void formatINR
-
     if (loading) return (
         <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center">
             <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -184,10 +188,10 @@ function PlayerSetupContent() {
                 {/* Progress */}
                 <div className="flex justify-center mb-8">
                     <div className="flex items-center gap-2 text-sm font-semibold">
-                        <a href="/auction/auction-setup" className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200">✓</a>
+                        <a href="/auction/auction-setup" className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200">OK</a>
                         <span className="text-slate-600">Settings</span>
                         <div className="w-8 h-0.5 bg-indigo-500 mx-2"/>
-                        <a href="/auction/team-setup" className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200">✓</a>
+                        <a href="/auction/team-setup" className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center hover:bg-indigo-200">OK</a>
                         <span className="text-slate-600">Teams</span>
                         <div className="w-8 h-0.5 bg-indigo-500 mx-2"/>
                         <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center">3</span>
@@ -320,7 +324,7 @@ function PlayerSetupContent() {
                 {/* Footer nav */}
                 <div className="mt-8 flex flex-col md:flex-row items-center justify-between border-t border-slate-200 pt-6 gap-4">
                     <a href="/auction/team-setup" className="px-6 py-2.5 text-slate-500 hover:bg-slate-200 bg-slate-100 rounded-xl text-sm font-semibold transition-all w-full md:w-auto text-center">
-                        ← Back to Teams
+                        {'<-'} Back to Teams
                     </a>
                     
                     <button onClick={() => router.push('/dashboard/admin')} className="w-full md:w-auto px-8 py-3.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-[0_4px_14px_0_rgb(0,0,0,0.39)] transition-all flex items-center justify-center gap-2">

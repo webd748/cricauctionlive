@@ -4,10 +4,12 @@ import { FormEvent, Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { postJson } from '@/lib/apiClient'
+import { resolvePostAuthPath, sanitizeNextPath } from '@/lib/navigation'
 
 type LoginResult = {
     data: {
         user: { id: string; email: string | null }
+        isAdmin: boolean
     }
 }
 
@@ -33,7 +35,7 @@ function LoginPageContent() {
     const [error, setError] = useState<string | null>(null)
     const [busy, setBusy] = useState(false)
 
-    const next = search.get('next') || '/plans'
+    const next = sanitizeNextPath(search.get('next'), '/plans')
     const errorFromRedirect = search.get('error')
     const registered = search.get('registered') === '1'
     const googleHref = `/api/auth/google/start?next=${encodeURIComponent(next)}`
@@ -43,9 +45,8 @@ function LoginPageContent() {
         setError(null)
         setBusy(true)
         try {
-            await postJson<LoginResult>('/api/auth/login', { email, password })
-            const safeNext = next.startsWith('/') ? next : '/plans'
-            router.replace(safeNext)
+            const result = await postJson<LoginResult>('/api/auth/login', { email, password })
+            router.replace(resolvePostAuthPath(next, result.data.isAdmin))
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Unable to sign in.'
             setError(message)

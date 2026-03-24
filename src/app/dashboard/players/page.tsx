@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import { normalizePhotoUrl } from '@/lib/photoUrl'
 
@@ -79,30 +78,56 @@ function PlayersContent() {
     const [defaultBasePrice, setDefaultBasePrice] = useState<number>(0)
 
     const fetchData = useCallback(async () => {
-        const [{ data: playersData }, { data: soldData }, { data: settingsData }] = await Promise.all([
-            supabase.from('players').select('id, name, role, place, photo_url, is_sold, created_at').order('created_at', { ascending: true }),
-            supabase.from('sold_players').select('player_id, sold_price, teams(name, acronym, logo_url)'),
-            supabase.from('auction_settings').select('base_price').limit(1).single(),
-        ])
+        try {
+            const [playersResponse, settingsResponse] = await Promise.all([
+                fetch('/api/players?view=dashboard', {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
+                }),
+                fetch('/api/settings', {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
+                }),
+            ])
 
-        if (settingsData?.base_price) setDefaultBasePrice(settingsData.base_price)
+            const playersPayload = (await playersResponse.json().catch(() => null)) as
+                | { data?: { players?: Player[]; sold?: SoldEntry[] }; error?: string }
+                | null
+            if (!playersResponse.ok) {
+                throw new Error(playersPayload?.error ?? 'Failed to load players')
+            }
+            const settingsPayload = (await settingsResponse.json().catch(() => null)) as
+                | { data?: { base_price?: number } | null; error?: string }
+                | null
+            if (!settingsResponse.ok) {
+                throw new Error(settingsPayload?.error ?? 'Failed to load settings')
+            }
 
-        const soldMap = new Map<string, SoldEntry>()
-            ; (soldData ?? []).forEach((s: unknown) => {
-                const entry = s as SoldEntry
+            if (typeof settingsPayload?.data?.base_price === 'number') {
+                setDefaultBasePrice(settingsPayload.data.base_price)
+            }
+
+            const soldMap = new Map<string, SoldEntry>()
+            ;(playersPayload?.data?.sold ?? []).forEach((entry) => {
                 soldMap.set(entry.player_id, entry)
             })
 
-        const enriched: EnrichedPlayer[] = (playersData ?? []).map(p => {
-            const sold = soldMap.get(p.id)
-            return {
-                ...p,
-                sold_price: sold?.sold_price,
-                team: sold?.teams ?? null,
-            }
-        })
-        setPlayers(enriched)
-        setLoading(false)
+            const enriched: EnrichedPlayer[] = (playersPayload?.data?.players ?? []).map((player) => {
+                const sold = soldMap.get(player.id)
+                return {
+                    ...player,
+                    sold_price: sold?.sold_price,
+                    team: sold?.teams ?? null,
+                }
+            })
+            setPlayers(enriched)
+        } catch {
+            setPlayers([])
+        } finally {
+            setLoading(false)
+        }
     }, [])
 
     useEffect(() => {

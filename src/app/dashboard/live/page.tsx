@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import { normalizePhotoUrl } from '@/lib/photoUrl'
+import { decodeObject } from '@/lib/decode'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,51 +101,70 @@ function LiveAuctionContent() {
     const [countdownIdx, setCountdownIdx] = useState(0)
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
     const cdRef = useRef<NodeJS.Timeout | null>(null)
-    const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+    const etagRef = useRef<string | null>(null)
 
     const fetchAll = useCallback(async () => {
-        const { data: stateData } = await supabase
-            .from('auction_state').select('id,current_player_id,current_bid,current_team_id,is_live')
-            .limit(1).single()
+        try {
+            const headers: Record<string, string> = {}
+            if (etagRef.current) {
+                headers['If-None-Match'] = etagRef.current
+            }
 
-        const state: AuctionState = stateData ?? { current_player_id: null, current_bid: 0, current_team_id: null, is_live: false }
-        setAuctionState(state)
+            const response = await fetch('/api/auction?view=live', {
+                method: 'GET',
+                headers,
+                credentials: 'include',
+            })
 
-        if (state.current_player_id) {
-            const { data: pData } = await supabase.from('players')
-                .select('id,name,role,place,photo_url').eq('id', state.current_player_id).single()
-            setPlayer(pData ?? null)
-        } else setPlayer(null)
+            if (response.status === 304) {
+                return
+            }
 
-        const { data: teamsData } = await supabase.from('teams')
-            .select('id,name,acronym,logo_url,wallet_balance').order('wallet_balance', { ascending: false })
+            const newEtag = response.headers.get('ETag')
+            if (newEtag) {
+                etagRef.current = newEtag
+            }
 
-        const { data: soldData } = await supabase.from('sold_players')
-            .select('id,sold_price,sold_at,team_id,players(name,role),teams(name,acronym)')
-            .order('sold_at', { ascending: false }).limit(20)
+            const payload = (await response.json().catch(() => null)) as
+                | {
+                    data?: {
+                        auctionState?: AuctionState | null
+                        currentPlayer?: Player | null
+                        teams?: Team[]
+                        sold?: SoldRecord[]
+                        settings?: { bid_tiers?: BidTier[]; min_squad_size?: number; base_price?: number } | null
+                    }
+                    error?: string
+                }
+                | null
+            if (!response.ok) {
+                throw new Error(payload?.error ?? 'Failed to load live auction')
+            }
 
-        const { data: settingsData } = await supabase
-            .from('auction_settings').select('bid_tiers, min_squad_size, base_price').limit(1).single()
-        if (settingsData) {
-            if (Array.isArray(settingsData.bid_tiers)) setBidTiers(settingsData.bid_tiers as BidTier[])
-            setMinSquadSize(settingsData.min_squad_size ?? 15)
-            setBasePrice(settingsData.base_price ?? 0)
+            const decodedData = decodeObject(payload?.data)
+
+            const state =
+                decodedData?.auctionState ??
+                ({ current_player_id: null, current_bid: 0, current_team_id: null, is_live: false } as AuctionState)
+            setAuctionState(state)
+            setPlayer(decodedData?.currentPlayer ?? null)
+            setSold((decodedData?.sold ?? []) as SoldRecord[])
+            setTeams((decodedData?.teams ?? []).map((team) => ({
+                ...team,
+                wallet_balance: team.wallet_balance ?? 0,
+                player_count: team.player_count ?? 0,
+            })))
+
+            const settings = decodedData?.settings
+            if (settings) {
+                if (Array.isArray(settings.bid_tiers)) setBidTiers(settings.bid_tiers)
+                setMinSquadSize(settings.min_squad_size ?? 15)
+                setBasePrice(settings.base_price ?? 0)
+            }
+        } finally {
+            setLoading(false)
+            setLastRefresh(new Date())
         }
-
-        const soldList = (soldData ?? []) as unknown as (SoldRecord & { team_id: string })[]
-        setSold(soldList)
-
-        const { data: teamCounts } = await supabase.rpc('team_player_counts')
-        const countMap: Record<string, number> = {}
-        ;(teamCounts ?? []).forEach((row: { team_id: string; player_count: number }) => {
-            countMap[row.team_id] = Number(row.player_count ?? 0)
-        })
-
-        setTeams((teamsData ?? []).map(t => ({
-            ...t, wallet_balance: t.wallet_balance ?? 0, player_count: countMap[t.id] ?? 0,
-        })))
-        setLoading(false)
-        setLastRefresh(new Date())
     }, [])
 
     useEffect(() => {
@@ -153,22 +172,10 @@ function LiveAuctionContent() {
             void fetchAll()
         }
         const kickoff = window.setTimeout(runFetch, 0)
-        intervalRef.current = setInterval(runFetch, 20000)
-        realtimeRef.current = supabase
-            .channel('live-auction')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_state' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sold_players' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_settings' }, runFetch)
-            .subscribe()
+        intervalRef.current = setInterval(runFetch, 3000)
         return () => {
             window.clearTimeout(kickoff)
             if (intervalRef.current) clearInterval(intervalRef.current)
-            if (realtimeRef.current) {
-                void supabase.removeChannel(realtimeRef.current)
-                realtimeRef.current = null
-            }
         }
     }, [fetchAll])
 

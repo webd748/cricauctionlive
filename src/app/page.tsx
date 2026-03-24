@@ -65,24 +65,24 @@ export default function HomePage() {
                 </header>
 
                 <section className="mt-12 md:mt-16 lg:mt-20">
-                    <div className="grid lg:grid-cols-[0.96fr_1.04fr] items-center gap-12 lg:gap-14">
-                        <div>
+                    <div className="flex flex-col items-center text-center gap-12 lg:gap-14">
+                        <div className="max-w-4xl mx-auto flex flex-col items-center">
                             <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 Auction Room Ready
                             </p>
-                            <h1 className="mt-6 text-4xl md:text-5xl lg:text-[64px] leading-[1.01] font-black tracking-tight text-slate-900">
+                            <h1 className="mt-6 text-4xl md:text-5xl lg:text-[72px] leading-[1.05] font-black tracking-tight text-slate-900">
                                 Run high-stakes
                                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-600">
                                     cricket player auctions
                                 </span>
                                 with precision and pace.
                             </h1>
-                            <p className="mt-6 text-slate-600 text-base md:text-xl max-w-xl leading-relaxed">
+                            <p className="mt-6 text-slate-600 text-base md:text-xl max-w-2xl leading-relaxed">
                                 From live player bidding to purse tracking and squad balance, this platform gives
                                 organizers and team owners a premium auction room experience.
                             </p>
-                            <div className="mt-8 flex flex-wrap gap-3">
+                            <div className="mt-8 flex flex-wrap justify-center gap-3">
                                 <Link
                                     href="/register?next=/plans"
                                     className="px-6 py-3 rounded-xl bg-slate-900 text-white text-sm md:text-base font-semibold hover:bg-black transition-colors shadow-lg shadow-slate-900/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
@@ -102,7 +102,7 @@ export default function HomePage() {
                                     Download Sample CSV
                                 </Link>
                             </div>
-                            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs md:text-sm text-slate-500">
+                            <div className="mt-8 flex flex-wrap justify-center items-center gap-x-5 gap-y-2 text-xs md:text-sm text-slate-500">
                                 <span>Live player auction rounds</span>
                                 <span className="h-1 w-1 rounded-full bg-slate-300" />
                                 <span>Team demand and purse strategy</span>
@@ -111,7 +111,7 @@ export default function HomePage() {
                             </div>
                         </div>
 
-                        <div className="w-full">
+                        <div className="w-full max-w-5xl mx-auto">
                             <HeroAuctionBoard />
                         </div>
                     </div>

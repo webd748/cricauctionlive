@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGoogleOAuthUrl } from '@/lib/server/modules/authService'
 import { logger } from '@/lib/logger'
+import { sanitizeNextPath } from '@/lib/navigation'
 
 export async function GET(req: NextRequest) {
-    const next = req.nextUrl.searchParams.get('next') || '/plans'
+    const next = sanitizeNextPath(req.nextUrl.searchParams.get('next'), '/plans')
     const callback = new URL('/api/auth/google/callback', req.url)
     callback.searchParams.set('next', next)
 

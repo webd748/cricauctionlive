@@ -5,22 +5,21 @@ import {
 } from '@/lib/server/modules/authModule'
 import { submitBillingPaymentProof } from '@/lib/server/modules/billingManagement'
 import { logger } from '@/lib/logger'
-
-function authStatus(errorMessage: string): number {
-    if (errorMessage === 'Not authenticated.' || errorMessage === 'Invalid session.') {
-        return 401
-    }
-    return 400
-}
+import { hasValidSameOrigin } from '@/lib/server/csrf'
+import { authStatus, errorJson, safePublicErrorMessage } from '@/lib/server/apiErrors'
 
 export async function POST(req: NextRequest) {
+    if (!hasValidSameOrigin(req)) {
+        return errorJson('Invalid request origin.', 403)
+    }
+
     let auth
     try {
         auth = await requireAuthenticatedAccess(req)
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Not authenticated.'
         logger.warn('Billing payment auth failed', { message })
-        return NextResponse.json({ error: message }, { status: authStatus(message) })
+        return errorJson(safePublicErrorMessage(error, 'Authentication failed.'), authStatus(message))
     }
 
     const formData = await req.formData()
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
     const screenshot = screenshotValue instanceof File ? screenshotValue : null
 
     if (!screenshot) {
-        return NextResponse.json({ error: 'Payment screenshot is required.' }, { status: 400 })
+        return errorJson('Payment screenshot is required.', 400)
     }
 
     try {
@@ -45,8 +44,10 @@ export async function POST(req: NextRequest) {
         logger.info('Billing payment submitted', { userId: auth.user.id })
         return response
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to submit payment proof.'
-        logger.error('Billing payment submission failed', { message, userId: auth.user.id })
-        return NextResponse.json({ error: message }, { status: 400 })
+        logger.error('Billing payment submission failed', {
+            message: error instanceof Error ? error.message : String(error),
+            userId: auth.user.id,
+        })
+        return errorJson(safePublicErrorMessage(error, 'Failed to submit payment proof.'), 400)
     }
 }

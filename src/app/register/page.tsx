@@ -4,10 +4,12 @@ import { FormEvent, Suspense, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { postJson } from '@/lib/apiClient'
+import { resolvePostAuthPath, sanitizeNextPath } from '@/lib/navigation'
 
 type RegisterResult = {
     data: {
         user: { id: string; email: string | null }
+        isAdmin: boolean
         requiresEmailVerification: boolean
     }
 }
@@ -36,7 +38,7 @@ function RegisterPageContent() {
     const [success, setSuccess] = useState<string | null>(null)
     const [busy, setBusy] = useState(false)
 
-    const next = search.get('next') || '/plans'
+    const next = sanitizeNextPath(search.get('next'), '/plans')
     const googleHref = useMemo(
         () => `/api/auth/google/start?next=${encodeURIComponent(next)}`,
         [next],
@@ -63,8 +65,7 @@ function RegisterPageContent() {
                 setSuccess('Account created. Please verify your email, then sign in.')
                 return
             }
-            const safeNext = next.startsWith('/') ? next : '/plans'
-            router.replace(safeNext)
+            router.replace(resolvePostAuthPath(next, result.data.isAdmin))
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Unable to register.'
             setError(message)

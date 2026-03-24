@@ -39,9 +39,17 @@ export function getRefreshTokenFromRequest(req?: NextRequest): string | null {
 export function isAdminUser(user: User | null): boolean {
     if (!user) return false
     const appRole = String(user.app_metadata?.role ?? '').toLowerCase()
-    const userRole = String(user.user_metadata?.role ?? '').toLowerCase()
-    const email = (user.email ?? '').toLowerCase()
-    return ADMIN_ROLES.includes(appRole) || ADMIN_ROLES.includes(userRole) || ADMIN_EMAILS.includes(email)
+    if (ADMIN_ROLES.includes(appRole)) {
+        return true
+    }
+
+    const email = String(user.email ?? '').toLowerCase()
+    const emailConfirmed = Boolean(user.email_confirmed_at)
+    if (emailConfirmed && email && ADMIN_EMAILS.includes(email)) {
+        return true
+    }
+
+    return false
 }
 
 export async function getAuthenticatedUser(accessToken: string): Promise<User | null> {

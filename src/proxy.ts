@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const ADMIN_ROLES = (process.env.APP_ADMIN_ROLES ?? 'admin,owner')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean)
-const ADMIN_EMAILS = (process.env.APP_ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean)
+import {
+    createScopedServerClient,
+    getAccessTokenFromRequest,
+    getRefreshTokenFromRequest,
+    getAuthenticatedUser,
+    isAdminUser,
+    refreshSessionWithToken,
+} from '@/lib/server/auth'
+import { setSessionCookies } from '@/lib/server/modules/authService'
+import { assertSecurityBaseline } from '@/lib/server/startupSecurity'
+import { hasActiveSubscription } from '@/lib/server/modules/subscriptionAccess'
 
 const AUTH_REQUIRED_PREFIXES = ['/dashboard', '/auction', '/plans', '/payment']
 const ADMIN_ONLY_PREFIXES = ['/dashboard/admin', '/dashboard/settings', '/auction']
@@ -20,34 +22,6 @@ const SUBSCRIPTION_REQUIRED_PREFIXES = [
     '/dashboard/admin',
 ]
 const SUBSCRIPTION_EXEMPT_PATHS = ['/dashboard/admin/payments']
-
-type JwtPayload = {
-    email?: string
-    role?: string
-    app_metadata?: { role?: string }
-    user_metadata?: { role?: string }
-}
-
-function decodePayload(token: string): JwtPayload | null {
-    const parts = token.split('.')
-    if (parts.length < 2) return null
-    try {
-        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-        const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
-        const json = atob(padded)
-        return JSON.parse(json) as JwtPayload
-    } catch {
-        return null
-    }
-}
-
-function isAdminHint(token: string): boolean {
-    const payload = decodePayload(token)
-    if (!payload) return false
-    const role = String(payload.app_metadata?.role ?? payload.user_metadata?.role ?? payload.role ?? '').toLowerCase()
-    const email = String(payload.email ?? '').toLowerCase()
-    return ADMIN_ROLES.includes(role) || ADMIN_EMAILS.includes(email)
-}
 
 function isProtectedPath(pathname: string): boolean {
     return AUTH_REQUIRED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
@@ -64,82 +38,73 @@ function isSubscriptionRequiredPath(pathname: string): boolean {
     return SUBSCRIPTION_REQUIRED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
-type SessionPayload = {
-    data?: {
-        isAdmin?: boolean
+type SessionResolution = {
+    ok: boolean
+    isAdmin: boolean
+    accessToken: string | null
+    refreshedSession?: {
+        accessToken: string
+        refreshToken: string
     }
 }
 
-type BillingPayload = {
-    data?: {
-        subscription?: {
-            status?: 'pending_payment' | 'pending_review' | 'active' | 'rejected' | 'expired'
-            expires_at?: string | null
-        } | null
-    }
-}
+async function resolveSession(req: NextRequest): Promise<SessionResolution> {
+    const accessToken = getAccessTokenFromRequest(req)
+    const refreshToken = getRefreshTokenFromRequest(req)
 
-async function resolveSessionFromApi(req: NextRequest): Promise<{ ok: boolean; isAdmin: boolean }> {
-    try {
-        const sessionUrl = new URL('/api/auth/session', req.url)
-        const response = await fetch(sessionUrl, {
-            method: 'GET',
-            headers: {
-                cookie: req.headers.get('cookie') ?? '',
-                accept: 'application/json',
-            },
-            cache: 'no-store',
-        })
-        if (!response.ok) return { ok: false, isAdmin: false }
-        const payload = (await response.json().catch(() => null)) as SessionPayload | null
-        return {
-            ok: true,
-            isAdmin: Boolean(payload?.data?.isAdmin),
+    if (accessToken) {
+        const user = await getAuthenticatedUser(accessToken)
+        if (user) {
+            return {
+                ok: true,
+                isAdmin: isAdminUser(user),
+                accessToken,
+            }
         }
-    } catch {
-        return { ok: false, isAdmin: false }
+    }
+
+    if (!refreshToken) {
+        return { ok: false, isAdmin: false, accessToken: null }
+    }
+
+    const refreshed = await refreshSessionWithToken(refreshToken)
+    if (!refreshed) {
+        return { ok: false, isAdmin: false, accessToken: null }
+    }
+
+    return {
+        ok: true,
+        isAdmin: isAdminUser(refreshed.user),
+        accessToken: refreshed.accessToken,
+        refreshedSession: {
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+        },
     }
 }
 
-async function resolveBillingFromApi(
-    req: NextRequest,
+async function resolveBilling(
+    accessToken: string,
 ): Promise<{ ok: boolean; status: string | null; expiresAt: string | null }> {
     try {
-        const billingUrl = new URL('/api/billing/status', req.url)
-        const response = await fetch(billingUrl, {
-            method: 'GET',
-            headers: {
-                cookie: req.headers.get('cookie') ?? '',
-                accept: 'application/json',
-            },
-            cache: 'no-store',
-        })
-        if (!response.ok) {
+        const client = createScopedServerClient(accessToken)
+        const { data, error } = await client
+            .from('billing_subscriptions')
+            .select('status,expires_at')
+            .limit(1)
+            .maybeSingle()
+        if (error) {
             return { ok: false, status: null, expiresAt: null }
         }
-        const payload = (await response.json().catch(() => null)) as BillingPayload | null
+
         return {
             ok: true,
-            status: payload?.data?.subscription?.status ?? null,
-            expiresAt: payload?.data?.subscription?.expires_at ?? null,
+            status: (data?.status as string | null) ?? null,
+            expiresAt: data?.expires_at ?? null,
         }
     } catch {
         return { ok: false, status: null, expiresAt: null }
     }
-}
-
-function hasActiveSubscription(status: string | null, expiresAt: string | null): boolean {
-    if (status !== 'active') {
-        return false
-    }
-    if (!expiresAt) {
-        return true
-    }
-    const expiry = Date.parse(expiresAt)
-    if (Number.isNaN(expiry)) {
-        return true
-    }
-    return expiry > Date.now()
 }
 
 function redirectToLogin(req: NextRequest, pathname: string) {
@@ -154,38 +119,49 @@ function redirectToStep(req: NextRequest, pathname: string, destination: '/plans
     return NextResponse.redirect(url)
 }
 
+function withRefreshedCookies(response: NextResponse, session: SessionResolution) {
+    if (!session.refreshedSession) return response
+    setSessionCookies(response, session.refreshedSession.accessToken, session.refreshedSession.refreshToken)
+    return response
+}
+
 export async function proxy(req: NextRequest) {
     const { pathname } = req.nextUrl
     if (!isProtectedPath(pathname)) {
         return NextResponse.next()
     }
 
-    const accessToken = req.cookies.get('sb-access-token')?.value
-    const refreshToken = req.cookies.get('sb-refresh-token')?.value
+    try {
+        await assertSecurityBaseline()
+    } catch {
+        return NextResponse.json({ error: 'Service temporarily unavailable.' }, { status: 503 })
+    }
+
+    const accessToken = getAccessTokenFromRequest(req)
+    const refreshToken = getRefreshTokenFromRequest(req)
     if (!accessToken && !refreshToken) {
         return redirectToLogin(req, pathname)
     }
 
-    const session = await resolveSessionFromApi(req)
+    const session = await resolveSession(req)
     if (!session.ok) {
         return redirectToLogin(req, pathname)
     }
 
     if (isAdminPath(pathname)) {
-        const hintAllowed = accessToken ? isAdminHint(accessToken) : false
-        if (!session.isAdmin && !hintAllowed) {
-            return NextResponse.redirect(new URL('/unauthorized', req.url))
+        if (!session.isAdmin) {
+            return withRefreshedCookies(NextResponse.redirect(new URL('/unauthorized', req.url)), session)
         }
     }
 
     if (isSubscriptionRequiredPath(pathname)) {
-        const billing = await resolveBillingFromApi(req)
+        const billing = await resolveBilling(session.accessToken!)
         if (!billing.ok) {
-            return redirectToStep(req, pathname, '/plans')
+            return withRefreshedCookies(redirectToStep(req, pathname, '/plans'), session)
         }
 
         if (hasActiveSubscription(billing.status, billing.expiresAt)) {
-            return NextResponse.next()
+            return withRefreshedCookies(NextResponse.next(), session)
         }
 
         if (
@@ -193,13 +169,13 @@ export async function proxy(req: NextRequest) {
             billing.status === 'pending_review' ||
             billing.status === 'rejected'
         ) {
-            return redirectToStep(req, pathname, '/payment')
+            return withRefreshedCookies(redirectToStep(req, pathname, '/payment'), session)
         }
 
-        return redirectToStep(req, pathname, '/plans')
+        return withRefreshedCookies(redirectToStep(req, pathname, '/plans'), session)
     }
 
-    return NextResponse.next()
+    return withRefreshedCookies(NextResponse.next(), session)
 }
 
 export const config = {

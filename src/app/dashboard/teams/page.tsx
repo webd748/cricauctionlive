@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import { postJson } from '@/lib/apiClient'
 import { getErrorMessage } from '@/lib/errors'
@@ -80,32 +79,54 @@ function TeamsContent() {
     const [editingPlayer, setEditingPlayer] = useState<SoldPlayer | null>(null)
     const [editBusy, setEditBusy] = useState(false)
     const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-    const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
     const fetchData = useCallback(async () => {
-        const [{ data: teamsData }, { data: soldData }, { data: settingsData }] = await Promise.all([
-            supabase.from('teams').select('id, name, acronym, logo_url, wallet_balance').order('name', { ascending: true }),
-            supabase.from('sold_players').select('id, player_id, sold_price, team_id, players(id, name, role, photo_url)'),
-            supabase.from('auction_settings').select('min_squad_size, base_price').limit(1).single(),
-        ])
-
-        if (settingsData?.min_squad_size) setMinSquadSize(settingsData.min_squad_size)
-        if (settingsData?.base_price) setBasePrice(settingsData.base_price)
-
-        const soldList = (soldData ?? []) as unknown as SoldPlayer[]
-        const enriched: TeamWithPlayers[] = (teamsData ?? []).map(t => {
-            const teamSold = soldList.filter(s => s.team_id === t.id)
-            const spent = teamSold.reduce((sum, s) => sum + s.sold_price, 0)
-            return {
-                ...t,
-                wallet_balance: t.wallet_balance ?? 0,
-                total_budget: (t.wallet_balance ?? 0) + spent,
-                soldPlayers: teamSold,
-                spent,
+        try {
+            const response = await fetch('/api/teams?view=dashboard', {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+            })
+            const payload = (await response.json().catch(() => null)) as
+                | {
+                    data?: {
+                        teams?: Team[]
+                        soldPlayers?: SoldPlayer[]
+                        settings?: { min_squad_size?: number; base_price?: number } | null
+                    }
+                    error?: string
+                }
+                | null
+            if (!response.ok) {
+                throw new Error(payload?.error ?? 'Failed to load teams dashboard')
             }
-        })
-        setTeams(enriched)
-        setLoading(false)
+
+            if (typeof payload?.data?.settings?.min_squad_size === 'number') {
+                setMinSquadSize(payload.data.settings.min_squad_size)
+            }
+            if (typeof payload?.data?.settings?.base_price === 'number') {
+                setBasePrice(payload.data.settings.base_price)
+            }
+
+            const soldList = (payload?.data?.soldPlayers ?? []) as SoldPlayer[]
+            const teamsList = (payload?.data?.teams ?? []) as Team[]
+            const enriched: TeamWithPlayers[] = teamsList.map((team) => {
+                const teamSold = soldList.filter((soldItem) => soldItem.team_id === team.id)
+                const spent = teamSold.reduce((sum, soldItem) => sum + soldItem.sold_price, 0)
+                return {
+                    ...team,
+                    wallet_balance: team.wallet_balance ?? 0,
+                    total_budget: (team.wallet_balance ?? 0) + spent,
+                    soldPlayers: teamSold,
+                    spent,
+                }
+            })
+            setTeams(enriched)
+        } catch (error) {
+            setActionError(getErrorMessage(error, 'Failed to load teams dashboard.'))
+        } finally {
+            setLoading(false)
+        }
     }, [])
 
     useEffect(() => {
@@ -114,20 +135,10 @@ function TeamsContent() {
         }
         const kickoff = window.setTimeout(runFetch, 0)
         refreshIntervalRef.current = setInterval(runFetch, 20000)
-        realtimeRef.current = supabase
-            .channel('teams-dashboard')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sold_players' }, runFetch)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_settings' }, runFetch)
-            .subscribe()
         return () => {
             window.clearTimeout(kickoff)
             if (refreshIntervalRef.current) {
                 clearInterval(refreshIntervalRef.current)
-            }
-            if (realtimeRef.current) {
-                void supabase.removeChannel(realtimeRef.current)
-                realtimeRef.current = null
             }
         }
     }, [fetchData])

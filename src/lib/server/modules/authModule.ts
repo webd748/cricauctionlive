@@ -10,6 +10,8 @@ import {
     refreshSessionWithToken,
 } from '@/lib/server/auth'
 import { setSessionCookies } from '@/lib/server/modules/authService'
+import { assertActiveSubscription, type SubscriptionState } from '@/lib/server/modules/subscriptionAccess'
+import { assertSecurityBaseline } from '@/lib/server/startupSecurity'
 
 export type AdminAccessResult = {
     user: User
@@ -20,6 +22,7 @@ export type AdminAccessResult = {
         accessToken: string
         refreshToken: string
     }
+    subscription?: SubscriptionState
 }
 
 export function applyRefreshedSessionCookies(response: NextResponse, auth: AdminAccessResult) {
@@ -28,6 +31,8 @@ export function applyRefreshedSessionCookies(response: NextResponse, auth: Admin
 }
 
 export async function requireAuthenticatedAccess(req: NextRequest): Promise<AdminAccessResult> {
+    await assertSecurityBaseline()
+
     const accessToken = getAccessTokenFromRequest(req)
     const refreshToken = getRefreshTokenFromRequest(req)
 
@@ -70,4 +75,20 @@ export async function requireAdminAccess(req: NextRequest): Promise<AdminAccessR
         throw new Error('Admin access required.')
     }
     return auth
+}
+
+type ActiveSubscriptionOptions = {
+    admin?: boolean
+}
+
+export async function requireActiveSubscriptionAccess(
+    req: NextRequest,
+    options: ActiveSubscriptionOptions = {},
+): Promise<AdminAccessResult> {
+    const auth = options.admin ? await requireAdminAccess(req) : await requireAuthenticatedAccess(req)
+    const subscription = await assertActiveSubscription(auth.client)
+    return {
+        ...auth,
+        subscription,
+    }
 }

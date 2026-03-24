@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
 import { ClientOnly } from '@/components/ClientOnly'
 import { postJson } from '@/lib/apiClient'
 
@@ -102,27 +101,48 @@ function SettingsContent() {
     useEffect(() => {
         const load = async () => {
             setLoading(true)
-            const { data, error } = await supabase
-                .from('auction_settings')
-                .select('*')
-                .limit(1)
-                .single()
-
-            if (data) {
-                setExistingId(data.id)
-                setForm({
-                    auction_name: data.auction_name ?? '',
-                    num_teams: data.num_teams ?? 0,
-                    min_squad_size: data.min_squad_size ?? 0,
-                    wallet_per_team: data.wallet_per_team ?? 0,
-                    base_price: data.base_price ?? 0,
-                    is_active: data.is_active ?? true,
-                    bid_tiers: Array.isArray(data.bid_tiers) && data.bid_tiers.length > 0
-                        ? data.bid_tiers
-                        : DEFAULT_TIERS,
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'GET',
+                    credentials: 'include',
+                    cache: 'no-store',
                 })
-            } else if (error && error.code !== 'PGRST116') {
-                setError(error.message)
+                const payload = (await response.json().catch(() => null)) as
+                    | { data?: Record<string, unknown> | null; error?: string }
+                    | null
+                if (!response.ok) {
+                    throw new Error(payload?.error ?? 'Failed to load settings')
+                }
+
+                const data = payload?.data as
+                    | {
+                        id: string
+                        auction_name?: string
+                        num_teams?: number
+                        min_squad_size?: number
+                        wallet_per_team?: number
+                        base_price?: number
+                        is_active?: boolean
+                        bid_tiers?: BidTier[]
+                    }
+                    | null
+                if (data) {
+                    setExistingId(data.id)
+                    setForm({
+                        auction_name: data.auction_name ?? '',
+                        num_teams: data.num_teams ?? 0,
+                        min_squad_size: data.min_squad_size ?? 0,
+                        wallet_per_team: data.wallet_per_team ?? 0,
+                        base_price: data.base_price ?? 0,
+                        is_active: data.is_active ?? true,
+                        bid_tiers: Array.isArray(data.bid_tiers) && data.bid_tiers.length > 0
+                            ? data.bid_tiers
+                            : DEFAULT_TIERS,
+                    })
+                }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Failed to load settings.'
+                setError(message)
             }
             setLoading(false)
         }
