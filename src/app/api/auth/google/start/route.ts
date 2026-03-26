@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getGoogleOAuthUrl } from '@/lib/server/modules/authService'
 import { logger } from '@/lib/logger'
 import { sanitizeNextPath } from '@/lib/navigation'
+import { buildAbsoluteUrl } from '@/lib/server/request'
 
 export async function GET(req: NextRequest) {
     const next = sanitizeNextPath(req.nextUrl.searchParams.get('next'), '/plans')
-    const callback = new URL('/api/auth/google/callback', req.url)
+    const callback = buildAbsoluteUrl(req, '/api/auth/google/callback')
     callback.searchParams.set('next', next)
 
     try {
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to start Google sign-in.'
         logger.warn('Google OAuth start failed', { message })
-        const loginUrl = new URL('/login', req.url)
+        const loginUrl = buildAbsoluteUrl(req, '/login')
         loginUrl.searchParams.set('error', message)
         loginUrl.searchParams.set('next', next)
         return NextResponse.redirect(loginUrl)

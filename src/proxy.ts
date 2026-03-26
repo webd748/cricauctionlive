@@ -10,6 +10,7 @@ import {
 import { setSessionCookies } from '@/lib/server/modules/authService'
 import { assertSecurityBaseline } from '@/lib/server/startupSecurity'
 import { hasActiveSubscription } from '@/lib/server/modules/subscriptionAccess'
+import { buildAbsoluteUrl } from '@/lib/server/request'
 
 const AUTH_REQUIRED_PREFIXES = ['/dashboard', '/auction', '/plans', '/payment']
 const ADMIN_ONLY_PREFIXES = ['/dashboard/admin', '/dashboard/settings', '/auction']
@@ -108,13 +109,13 @@ async function resolveBilling(
 }
 
 function redirectToLogin(req: NextRequest, pathname: string) {
-    const loginUrl = new URL('/login', req.url)
+    const loginUrl = buildAbsoluteUrl(req, '/login')
     loginUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(loginUrl)
 }
 
 function redirectToStep(req: NextRequest, pathname: string, destination: '/plans' | '/payment') {
-    const url = new URL(destination, req.url)
+    const url = buildAbsoluteUrl(req, destination)
     url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
 }
@@ -150,7 +151,7 @@ export async function proxy(req: NextRequest) {
 
     if (isAdminPath(pathname)) {
         if (!session.isAdmin) {
-            return withRefreshedCookies(NextResponse.redirect(new URL('/unauthorized', req.url)), session)
+            return withRefreshedCookies(NextResponse.redirect(buildAbsoluteUrl(req, '/unauthorized')), session)
         }
     }
 
