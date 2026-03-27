@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getGoogleOAuthUrl } from '@/lib/server/modules/authService'
+import { getGoogleOAuthUrl, GOOGLE_PKCE_VERIFIER_COOKIE } from '@/lib/server/modules/authService'
 import { logger } from '@/lib/logger'
 import { sanitizeNextPath } from '@/lib/navigation'
 import { buildAbsoluteUrl } from '@/lib/server/request'
@@ -10,8 +10,16 @@ export async function GET(req: NextRequest) {
     callback.searchParams.set('next', next)
 
     try {
-        const url = await getGoogleOAuthUrl(callback.toString())
-        return NextResponse.redirect(url)
+        const oauth = await getGoogleOAuthUrl(callback.toString())
+        const response = NextResponse.redirect(oauth.url)
+        response.cookies.set(GOOGLE_PKCE_VERIFIER_COOKIE, oauth.codeVerifier, {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
+            maxAge: 60 * 15,
+        })
+        return response
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to start Google sign-in.'
         logger.warn('Google OAuth start failed', { message })
