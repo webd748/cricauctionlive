@@ -171,6 +171,33 @@ export async function submitBillingPaymentProof(
     return getBillingState(client)
 }
 
+
+export async function activateBillingSubscription(
+    client: SupabaseClient,
+    input: {
+        subscriptionId: string
+        userId: string
+        validDays?: number
+    },
+): Promise<void> {
+    const safeValidDays = Math.min(365, Math.max(1, Number(input.validDays ?? 30)))
+    const expiresAt = new Date(Date.now() + safeValidDays * 24 * 60 * 60 * 1000).toISOString()
+
+    const { error } = await client
+        .from('billing_subscriptions')
+        .update({
+            status: 'active',
+            activated_at: new Date().toISOString(),
+            expires_at: expiresAt,
+        })
+        .eq('id', input.subscriptionId)
+        .eq('user_id', input.userId)
+
+    if (error) {
+        throw new Error(error.message)
+    }
+}
+
 export async function listBillingProofsForReview(
     client: SupabaseClient,
     status?: 'submitted' | 'approved' | 'rejected',

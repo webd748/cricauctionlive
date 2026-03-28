@@ -90,7 +90,7 @@ describe('Auth & Subscription Boundaries Integration', () => {
         const req = createReq()
         vi.mocked(auth.getAccessTokenFromRequest).mockReturnValue('valid-token')
         vi.mocked(auth.getAuthenticatedUser).mockResolvedValue({ id: 'usr_1' } as any)
-        const fakeSub = { status: 'active', planCode: 'league-6', maxTeams: 6, expiresAt: null } as any
+        const fakeSub = { status: 'active', planCode: 'free', maxTeams: 4, expiresAt: null } as any
         vi.mocked(subAccess.assertActiveSubscription).mockResolvedValue(fakeSub)
 
         const result = await requireActiveSubscriptionAccess(req)

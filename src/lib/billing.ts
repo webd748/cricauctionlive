@@ -1,8 +1,4 @@
-export type BillingPlanCode =
-    | 'league-6'
-    | 'league-8'
-    | 'league-10'
-    | 'league-12'
+export type BillingPlanCode = 'free' | 'p2' | 'p3' | 'p4' | 'p5'
 
 export type BillingPlan = {
     code: BillingPlanCode
@@ -15,36 +11,44 @@ export type BillingPlan = {
 
 export const BILLING_PLANS: BillingPlan[] = [
     {
-        code: 'league-6',
-        name: 'Starter 6',
-        maxTeams: 6,
-        amountInr: 1499,
-        tagline: 'Perfect for compact club auctions',
-        features: ['Up to 6 teams', 'Live admin controls', 'Player & team setup'],
+        code: 'free',
+        name: 'Free',
+        maxTeams: 4,
+        amountInr: 0,
+        tagline: 'Get started with a compact auction room',
+        features: ['Up to 4 teams', 'Core live controls', 'Player & team setup'],
     },
     {
-        code: 'league-8',
-        name: 'Pro 8',
+        code: 'p2',
+        name: 'P2',
         maxTeams: 8,
-        amountInr: 2499,
-        tagline: 'Ideal for mid-size competitive leagues',
+        amountInr: 1999,
+        tagline: 'Balanced setup for growing leagues',
         features: ['Up to 8 teams', 'Realtime live dashboard', 'Bid tier controls'],
     },
     {
-        code: 'league-10',
-        name: 'Elite 10',
-        maxTeams: 10,
-        amountInr: 3499,
-        tagline: 'For serious tournament organizers',
-        features: ['Up to 10 teams', 'Advanced live command flow', 'Setup + review tools'],
+        code: 'p3',
+        name: 'P3',
+        maxTeams: 12,
+        amountInr: 2599,
+        tagline: 'Expanded capacity for larger tournaments',
+        features: ['Up to 12 teams', 'Advanced live command flow', 'Setup + review tools'],
     },
     {
-        code: 'league-12',
-        name: 'Premier 12',
-        maxTeams: 12,
-        amountInr: 4499,
-        tagline: 'Full-scale auction night experience',
-        features: ['Up to 12 teams', 'High-intensity bidding support', 'Priority support workflow'],
+        code: 'p4',
+        name: 'P4',
+        maxTeams: 16,
+        amountInr: 2999,
+        tagline: 'High-capacity package for serious events',
+        features: ['Up to 16 teams', 'High-intensity bidding support', 'Priority support workflow'],
+    },
+    {
+        code: 'p5',
+        name: 'P5',
+        maxTeams: 32,
+        amountInr: 4599,
+        tagline: 'Enterprise-scale control for mega auctions',
+        features: ['Up to 32 teams', 'All premium workflow controls', 'Priority operations support'],
     },
 ]
 
