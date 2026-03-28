@@ -20,14 +20,14 @@ type AuthStorage = {
     removeItem: (key: string) => void | Promise<void>
 }
 
-function getAuthClient(options?: { flowType?: AuthFlowType; storage?: AuthStorage }) {
+function getAuthClient(options?: { flowType?: AuthFlowType; storage?: AuthStorage; persistSession?: boolean }) {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
         throw new Error('Supabase environment variables are missing.')
     }
 
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
-            persistSession: false,
+            persistSession: options?.persistSession ?? false,
             autoRefreshToken: false,
             flowType: options?.flowType ?? 'implicit',
             storage: options?.storage,
@@ -76,7 +76,7 @@ export async function getGoogleOAuthUrl(redirectTo: string): Promise<{ url: stri
         },
     }
 
-    const client = getAuthClient({ flowType: 'pkce', storage })
+    const client = getAuthClient({ flowType: 'pkce', storage, persistSession: true })
     const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo },
@@ -105,7 +105,7 @@ export async function exchangeOAuthCode(code: string, codeVerifier: string) {
         removeItem: () => undefined,
     }
 
-    const client = getAuthClient({ flowType: 'pkce', storage })
+    const client = getAuthClient({ flowType: 'pkce', storage, persistSession: true })
     const { data, error } = await client.auth.exchangeCodeForSession(code)
     if (error || !data.session || !data.user) {
         throw new Error(error?.message ?? 'Unable to complete Google sign-in.')
