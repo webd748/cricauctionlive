@@ -81,10 +81,11 @@ for each row execute function public.touch_billing_updated_at();
 
 insert into public.billing_plans (plan_code, name, max_teams, amount_inr, description, is_active)
 values
-    ('league-6', 'Starter 6', 6, 1499, 'Perfect for compact club auctions', true),
-    ('league-8', 'Pro 8', 8, 2499, 'Ideal for mid-size competitive leagues', true),
-    ('league-10', 'Elite 10', 10, 3499, 'For serious tournament organizers', true),
-    ('league-12', 'Premier 12', 12, 4499, 'Full-scale auction night experience', true)
+    ('free', 'Free', 4, 0, 'Get started with a compact auction room', true),
+    ('p2', 'P2', 8, 1999, 'Balanced setup for growing leagues', true),
+    ('p3', 'P3', 12, 2599, 'Expanded capacity for larger tournaments', true),
+    ('p4', 'P4', 16, 2999, 'High-capacity package for serious events', true),
+    ('p5', 'P5', 32, 4599, 'Enterprise-scale control for mega auctions', true)
 on conflict (plan_code) do update
 set
     name = excluded.name,

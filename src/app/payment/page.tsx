@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { BILLING_PLANS } from '@/lib/billing'
 import { getErrorMessage } from '@/lib/errors'
 
@@ -52,9 +52,11 @@ const UPI_ID = process.env.NEXT_PUBLIC_BILLING_UPI_ID ?? 'auction@upi'
 
 export default function PaymentPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [state, setState] = useState<BillingState | null>(null)
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
+    const [startingStripe, setStartingStripe] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [upiRef, setUpiRef] = useState('')
@@ -91,6 +93,59 @@ export default function PaymentPage() {
     useEffect(() => {
         void loadBillingStatus()
     }, [])
+
+    useEffect(() => {
+        const stripeState = searchParams.get('stripe')
+        if (stripeState === 'success') {
+            setSuccess('Stripe payment received. We are finalizing your activation.')
+            void loadBillingStatus()
+        } else if (stripeState === 'cancel') {
+            setError('Stripe checkout was canceled. You can retry anytime.')
+        }
+    }, [searchParams])
+
+
+    const handleStripeCheckout = async () => {
+        if (!state?.subscription) {
+            setError('Select a plan before starting payment.')
+            return
+        }
+
+        setError(null)
+        setSuccess(null)
+        setStartingStripe(true)
+
+        try {
+            const response = await fetch('/api/billing/stripe/checkout', {
+                method: 'POST',
+                credentials: 'include',
+            })
+            const payload = (await response.json().catch(() => null)) as
+                | { data?: { checkoutUrl?: string | null; alreadyActive?: boolean }; error?: string }
+                | null
+
+            if (!response.ok) {
+                throw new Error(payload?.error ?? 'Failed to create Stripe checkout session.')
+            }
+
+            if (payload?.data?.alreadyActive) {
+                setSuccess('Your subscription is active.')
+                await loadBillingStatus()
+                return
+            }
+
+            if (payload?.data?.checkoutUrl) {
+                window.location.href = payload.data.checkoutUrl
+                return
+            }
+
+            throw new Error('Stripe checkout URL is unavailable.')
+        } catch (err) {
+            setError(getErrorMessage(err, 'Failed to start Stripe checkout.'))
+        } finally {
+            setStartingStripe(false)
+        }
+    }
 
     const handleSubmitProof = async (event: React.FormEvent) => {
         event.preventDefault()
@@ -150,7 +205,7 @@ export default function PaymentPage() {
                     <p className="text-xs uppercase tracking-[0.25em] text-cyan-300/80 font-bold">Step 4</p>
                     <h1 className="mt-3 text-4xl md:text-5xl font-black tracking-tight">Payment Verification</h1>
                     <p className="mt-3 text-slate-300 max-w-2xl mx-auto">
-                        Submit manual payment proof to unlock auction setup and go live.
+Pay instantly via Stripe, or submit manual payment proof for admin verification.
                     </p>
                 </header>
 
@@ -249,7 +304,24 @@ export default function PaymentPage() {
                                 </div>
                             ) : (
                                 <form onSubmit={handleSubmitProof} className="space-y-4">
-                                    <h3 className="text-2xl font-bold">Upload payment screenshot</h3>
+                                    <h3 className="text-2xl font-bold">Complete payment</h3>
+
+                                    <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">
+                                        <p className="text-xs uppercase tracking-wide text-emerald-200/90 font-bold">Recommended</p>
+                                        <p className="mt-1 text-sm text-emerald-100">
+                                            Pay securely with Stripe and get your subscription activated automatically.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleStripeCheckout()}
+                                            disabled={startingStripe}
+                                            className="mt-3 rounded-xl bg-emerald-400 text-slate-950 px-5 py-2.5 font-bold hover:bg-emerald-300 disabled:opacity-60"
+                                        >
+                                            {startingStripe ? 'Redirecting…' : `Pay ${formatInr(state.subscription.amount_inr)} with Stripe`}
+                                        </button>
+                                    </div>
+
+                                    <h4 className="text-lg font-bold">Manual proof (optional fallback)</h4>
                                     <p className="text-sm text-slate-300">
                                         Step 1: send {formatInr(state.subscription.amount_inr)} to <span className="font-semibold">{UPI_ID}</span>.
                                     </p>
